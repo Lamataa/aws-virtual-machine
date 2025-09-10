@@ -51,40 +51,58 @@ resource "aws_route_table_association" "rt_public_to_sn_public" {
   route_table_id = aws_route_table.rt_public.id
 }
 
-# SECURITY GROUP
+# SECURITY GROUP - Empty base group
 resource "aws_security_group" "sg_public" {
-  name   = "sg_public"
-  vpc_id = aws_vpc.vpc.id
-  
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  
-  ingress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = [var.vpc_cidr_block]
-  }
-  
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  name        = "sg_public"
+  description = "Security group for public instances with controlled access via separate rules"
+  vpc_id      = aws_vpc.vpc.id
   
   tags = {
     Name = "sg-public"
   }
+}
+
+# EGRESS RULE
+resource "aws_security_group_rule" "egress_all" {
+  type              = "egress"
+  description       = "Allow all outbound traffic"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.sg_public.id
+}
+
+# INGRESS RULE - VPC Internal
+resource "aws_security_group_rule" "ingress_vpc" {
+  type              = "ingress"
+  description       = "Allow internal VPC communication"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = [var.vpc_cidr_block]
+  security_group_id = aws_security_group.sg_public.id
+}
+
+# INGRESS RULE - HTTP
+resource "aws_security_group_rule" "ingress_http" {
+  type              = "ingress"
+  description       = "Allow HTTP traffic from internet"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.sg_public.id
+}
+
+# OPTIONAL SSH RULE - Only created if IP is provided
+resource "aws_security_group_rule" "ssh_access" {
+  count             = var.allowed_ssh_cidr != "" ? 1 : 0
+  type              = "ingress"
+  description       = "Allow SSH access from specific IP address"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  cidr_blocks       = [var.allowed_ssh_cidr]
+  security_group_id = aws_security_group.sg_public.id
 }
